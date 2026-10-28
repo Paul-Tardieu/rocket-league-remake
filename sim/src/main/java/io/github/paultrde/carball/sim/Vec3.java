@@ -9,11 +9,23 @@ public record Vec3(double x, double y, double z) {
         return new Vec3(x + other.x, y + other.y, z + other.z);
     }
 
+    public Vec3 minus(Vec3 other) {
+        return new Vec3(x - other.x, y - other.y, z - other.z);
+    }
+
     public Vec3 times(double factor) {
         return new Vec3(x * factor, y * factor, z * factor);
     }
 
+    public double dot(Vec3 other) {
+        return x * other.x + y * other.y + z * other.z;
+    }
+
     public double length() {
-        return Math.sqrt(x * x + y * y + z * z);
+        return Math.sqrt(dot(this));
+    }
+
+    public Vec3 withZ(double newZ) {
+        return new Vec3(x, y, newZ);
     }
 }
