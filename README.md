@@ -4,6 +4,7 @@ Jeu de foot en voiture minimaliste et original, conçu pour entraîner des bots 
 
 - `rust/` : **version active**, avec vue 3D, boost, vitesse max, sauts, double saut et flips.
 - `java/` : premier prototype (vue 2D de dessus), conservé pour référence.
+- `training/` : entraînement de bots pour le vrai Rocket League (RLGym v2 + RocketSim), voir [training/README.md](training/README.md).
 
 ## Lancer le jeu
 

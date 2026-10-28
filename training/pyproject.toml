@@ -1,0 +1,13 @@
+[project]
+name = "carball-training"
+version = "0.1.0"
+description = "Train Rocket League bots with RLGym v2, RocketSim and RLGym-PPO"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch",
+    "rlgym[rl-sim]",
+    "rlgym-ppo @ git+https://github.com/AechPro/rlgym-ppo",
+]
+
+[tool.uv]
+package = false

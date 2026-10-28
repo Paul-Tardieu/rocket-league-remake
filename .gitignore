@@ -35,3 +35,7 @@ out/
 
 # Rust
 target/
+
+# Rocket League collision meshes (game assets): never commit them
+collision_meshes/
+collision-meshes/

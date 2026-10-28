@@ -3,7 +3,11 @@
 Minimalist, original car-soccer game built to train bots (reinforcement learning).
 Two implementations live side by side:
 
-- `rust/` — **active version**: 3D view, boost, flips. All new work goes here.
+- `training/` — **the real goal**: train bots for actual Rocket League with RLGym v2 + RocketSim +
+  RLGym-PPO (Python 3.12 via uv). `uv run python smoke_test.py`, `uv run python train.py` (needs a real TTY).
+  `training/collision_meshes/` holds meshes dumped from the user's own game: never commit or share them.
+- `rust/` — Carball, our own original car-soccer game (3D view, boost, flips). A playground, not a
+  training target: its physics deliberately differ from Rocket League.
 - `java/` — first prototype (2D top-down Swing view). Frozen; only touch it if asked.
 
 ## Commands (Rust, run from `rust/`)
