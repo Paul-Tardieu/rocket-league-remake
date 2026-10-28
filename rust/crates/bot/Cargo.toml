@@ -1,0 +1,13 @@
+[package]
+name = "carball-bot"
+description = "Bots for carball: GameState in, CarInput out"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+carball-sim.workspace = true
+glam.workspace = true
+
+[lints]
+workspace = true

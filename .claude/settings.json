@@ -1,17 +1,24 @@
 {
   "permissions": {
     "allow": [
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo check:*)",
       "Bash(./gradlew build:*)",
       "Bash(./gradlew test:*)",
       "Bash(./gradlew spotlessApply:*)",
-      "Bash(./gradlew :sim:test:*)",
       "Bash(./gradlew :render:run:*)"
     ],
     "deny": [
-      "Read(./**/build/**)",
-      "Read(./.gradle/**)",
-      "Read(./out/**)",
-      "Read(./gradle/wrapper/gradle-wrapper.jar)"
+      "Read(./rust/target/**)",
+      "Read(./java/**/build/**)",
+      "Read(./java/.gradle/**)",
+      "Read(./**/out/**)",
+      "Read(./java/gradle/wrapper/gradle-wrapper.jar)",
+      "Read(./**/Cargo.lock)"
     ]
   }
 }

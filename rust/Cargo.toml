@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = ["crates/sim", "crates/bot", "crates/game"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+glam = "0.34"
+macroquad = "0.4.16"
+carball-sim = { path = "crates/sim" }
+carball-bot = { path = "crates/bot" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+# Dependencies are optimised even in debug builds so the game stays smooth during development.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev]
+opt-level = 1

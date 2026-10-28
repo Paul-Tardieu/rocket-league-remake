@@ -26,9 +26,12 @@ replay_pid*
 # Gradle
 .gradle/
 build/
-!gradle/wrapper/gradle-wrapper.jar
+!java/gradle/wrapper/gradle-wrapper.jar
 
 # IntelliJ
 out/
 .idea/workspace.xml
 .idea/shelf/
+
+# Rust
+target/

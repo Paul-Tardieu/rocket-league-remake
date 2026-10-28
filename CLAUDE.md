@@ -1,27 +1,30 @@
 # Carball
 
-Minimalist, original car-soccer game in Java, built to train bots (reinforcement learning).
+Minimalist, original car-soccer game built to train bots (reinforcement learning).
+Two implementations live side by side:
 
-## Commands
-- `./gradlew build` — compile, test, check formatting
-- `./gradlew test` — tests only (`./gradlew :sim:test --tests '*WorldTest'` for one class)
-- `./gradlew spotlessApply` — format code (run before committing)
-- `./gradlew :render:run` — play vs the bot (`--args="--watch"` for bot vs bot)
+- `rust/` — **active version**: 3D view, boost, flips. All new work goes here.
+- `java/` — first prototype (2D top-down Swing view). Frozen; only touch it if asked.
 
-## Architecture
-- `sim/` — headless deterministic simulation. NO rendering, I/O, threads, wall-clock time or unseeded randomness.
-  `World.step(inputs)` returns `GameEvent`s; `World.state()` is an immutable `GameState` snapshot.
-- `bot/` — `Bot` = `GameState` → `CarInput`. `StrikerBot` is the hand-written baseline; its test checks a
-  success rate over seeded random starts, not single cases.
-- `render/` — Swing top-down view + keyboard (the keyboard is just another `Bot`). Depends on `bot` → `sim`, never the reverse.
-- `build-logic/` — shared Gradle conventions (`carball.java-conventions`). Versions live in `gradle/libs.versions.toml`.
-- Planned: a Gym-style bridge (`reset` / `step(actions)` → obs, reward, done) so Python can train bots.
+## Commands (Rust, run from `rust/`)
+- `cargo test` — all tests (sim + bot)
+- `cargo fmt` then `cargo clippy --all-targets -- -D warnings` — before committing
+- `cargo run --release -p game` — play vs the bot; add `-- --watch` (bot vs bot), `--speed=4`,
+  `--screenshot=out.png --after=3` (save a frame after 3 sim seconds, then exit; used to check visuals)
+
+Java (from `java/`): `./gradlew build`, `./gradlew :render:run`.
+
+## Rust architecture (`rust/crates/`)
+- `sim` — headless deterministic physics. Only dependency: `glam`. NO rendering, I/O, threads,
+  wall-clock time or unseeded randomness. `World::step(&inputs) -> Vec<GameEvent>`, `World::state()`.
+  Z is up, units ≈ cm-like "uu", seconds. Fixed 120 ticks/s.
+- `bot` — `Bot` trait (`&GameState -> CarInput`), `StrikerBot` hand-written baseline. Its tests check
+  a success rate over seeded random starts, not single cases.
+- `game` — macroquad 3D window + keyboard. Depends on `bot` → `sim`, never the reverse.
 
 ## Conventions
-- Java 25. Prefer `record` for value/state types, `sealed` interfaces + pattern matching for variants.
-- Composition over inheritance; classes `final` unless designed for extension. No mutable `static` state.
-- Fixed timestep (`PhysicsConfig.ticksPerSecond`). Units: Z is up, distances in arbitrary units (uu), seconds.
-- Validate invariants in record compact constructors.
-- Every physics change gets a JUnit 5 + AssertJ test; keep determinism tests green.
-- Compiler runs with `-Xlint:all -Werror`: fix warnings, don't suppress them.
-- Small focused commits; code, identifiers and comments in English.
+- Physics changes need a test; keep the determinism and fairness tests green (car order must not matter).
+- Car-ball contacts are resolved against the same ball and summed (no first-car bias).
+- Bots get their randomness from an explicit seed.
+- Code, identifiers and comments in English; user-facing replies in French.
+- The user judges results, not code: verify visuals with `--screenshot` and behaviour with headless runs.
