@@ -1,7 +1,7 @@
-"""First PPO training run: a 1v1 self-play agent in RocketSim, through RLGym v2 and RLGym-PPO.
+"""PPO training: a 1v1 self-play agent in RocketSim, through RLGym v2 and RLGym-PPO.
 
-Adapted from the RLGym v2 quickstart (https://rlgym.org/Getting%20Started/quickstart/), switched
-to 1v1 and sized for a 16-core machine. Run from this folder, with `collision_meshes/` next to it:
+Adapted from the RLGym v2 quickstart and its "Training an Agent" tutorial
+(https://rlgym.org/Rocket%20League/training_an_agent/): 1v1, dense rewards, tutorial-sized learner. Run from this folder, with `collision_meshes/` next to it:
 
     .venv/bin/python train.py
 """
@@ -9,9 +9,13 @@ to 1v1 and sized for a 16-core machine. Run from this folder, with `collision_me
 import os
 from pathlib import Path
 
-# Leave a few cores for the learner process and the rest of the machine.
-N_PROC = max(1, (os.cpu_count() or 4) - 4)
+# Simulation processes. Each one spends much of its time waiting for the policy to pick actions, so
+# running more processes than cores keeps both the CPU and the GPU busier. Override with CARBALL_N_PROC.
+N_PROC = int(os.environ.get("CARBALL_N_PROC", (os.cpu_count() or 4) * 3 // 2))
 COLLISION_MESHES = Path(__file__).resolve().parent / "collision_meshes"
+# Hidden layer sizes of the policy network; replay.py must rebuild the same shape to load it.
+POLICY_LAYERS = [1024, 1024, 512, 512]
+CRITIC_LAYERS = [1024, 1024, 512, 512]
 
 
 def init_rocketsim():
@@ -49,6 +53,8 @@ def build_env():
     from rlgym.rocket_league.state_mutators import FixedTeamSizeMutator, KickoffMutator, MutatorSequence
     from rlgym_ppo.util import RLGymV2GymWrapper
 
+    from rewards import InAirReward, SpeedTowardBallReward, VelocityBallToGoalReward
+
     team_size = 1
     # The agent picks an action every 8 physics ticks (120 Hz), i.e. 15 decisions per second.
     action_parser = RepeatAction(LookupTableAction(), repeats=8)
@@ -57,8 +63,15 @@ def build_env():
         NoTouchTimeoutCondition(timeout_seconds=30),
         TimeoutCondition(timeout_seconds=300),
     )
-    # Scoring is what matters; touching the ball is a small hint to get learning started.
-    reward = CombinedReward((GoalReward(), 10), (TouchReward(), 0.1))
+    # Goals are what matters, but they are far too rare to learn from at first: the dense terms
+    # reward every step spent driving at the ball or pushing it towards the opponent's goal.
+    reward = CombinedReward(
+        (InAirReward(), 0.002),
+        (SpeedTowardBallReward(), 0.01),
+        (VelocityBallToGoalReward(), 0.1),
+        (TouchReward(), 0.1),
+        (GoalReward(), 10.0),
+    )
     obs_builder = DefaultObs(
         zero_padding=None,
         pos_coef=np.asarray(
@@ -88,25 +101,26 @@ def build_env():
 if __name__ == "__main__":
     from rlgym_ppo import Learner
 
-    batch = 50_000
+    batch = 100_000
     learner = Learner(
         build_env,
         n_proc=N_PROC,
         min_inference_size=max(1, int(round(N_PROC * 0.9))),
         metrics_logger=None,
         ppo_batch_size=batch,
-        policy_layer_sizes=[512, 512],
-        critic_layer_sizes=[512, 512],
+        policy_layer_sizes=POLICY_LAYERS,
+        critic_layer_sizes=CRITIC_LAYERS,
         ts_per_iteration=batch,
         exp_buffer_size=3 * batch,
-        ppo_minibatch_size=batch,
+        ppo_minibatch_size=batch // 2,
         ppo_ent_coef=0.01,
-        policy_lr=5e-5,
-        critic_lr=5e-5,
-        ppo_epochs=1,
+        policy_lr=2e-4,
+        critic_lr=2e-4,
+        ppo_epochs=2,
         standardize_returns=True,
         standardize_obs=False,
-        save_every_ts=1_000_000,
+        save_every_ts=5_000_000,
+        n_checkpoints_to_keep=5,
         timestep_limit=1_000_000_000,
         log_to_wandb=False,
     )

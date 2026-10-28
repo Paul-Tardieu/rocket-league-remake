@@ -23,11 +23,25 @@ uv run python smoke_test.py   # vérifie l'arène et la physique, mesure la vite
 uv run python train.py        # lance l'entraînement 1v1 (Ctrl+C pour arrêter)
 ```
 
-Les sauvegardes du modèle vont dans `data/checkpoints/`. Il faut lancer `train.py` dans un vrai terminal :
+Pour voir le bot jouer :
+
+```bash
+uv run python replay.py --seconds 180   # enregistre 3 min avec la dernière sauvegarde
+```
+
+Ça écrit `data/replay.html`, une page à ouvrir dans un navigateur : replay vu de dessus, nombre de touches
+comparé à un bot qui joue au hasard, et courbe d'apprentissage (lue dans `data/train.log` si tu as lancé
+l'entraînement avec `script -qfc "uv run python train.py" data/train.log`).
+
+Récompenses (`rewards.py`) : vitesse vers la balle, vitesse de la balle vers le but adverse, petit bonus
+en l'air, touche de balle et but. Les buts seuls sont trop rares pour qu'un bot débutant apprenne quoi que ce soit.
+
+Les sauvegardes du modèle vont dans `data/checkpoints/` (les 5 plus récentes sont gardées). Il faut lancer `train.py` dans un vrai terminal :
 RLGym-PPO lit le clavier pendant l'entraînement.
 
-Mesuré sur la machine de dev (16 cœurs, GPU NVIDIA) : environ 15 000 pas d'agent par seconde, soit
-~120 000 ticks de physique par seconde (~1000× le temps réel).
+Mesuré sur la machine de dev (16 cœurs, GPU NVIDIA) : environ 19 000 pas d'agent par seconde avec 24 processus
+(~150 000 ticks de physique par seconde, ~1200× le temps réel), processeur à ~50 %. Nombre de processus
+réglable avec `CARBALL_N_PROC`.
 
 ## Jouer contre le bot dans le vrai jeu
 
