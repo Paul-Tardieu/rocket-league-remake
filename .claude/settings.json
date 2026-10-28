@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew build:*)",
+      "Bash(./gradlew test:*)",
+      "Bash(./gradlew spotlessApply:*)",
+      "Bash(./gradlew :sim:test:*)",
+      "Bash(./gradlew :render:run:*)"
+    ],
+    "deny": [
+      "Read(./**/build/**)",
+      "Read(./.gradle/**)",
+      "Read(./out/**)",
+      "Read(./gradle/wrapper/gradle-wrapper.jar)"
+    ]
+  }
+}
