@@ -6,11 +6,14 @@ Minimalist, original car-soccer game in Java, built to train bots (reinforcement
 - `./gradlew build` — compile, test, check formatting
 - `./gradlew test` — tests only (`./gradlew :sim:test --tests '*WorldTest'` for one class)
 - `./gradlew spotlessApply` — format code (run before committing)
-- `./gradlew :render:run` — run the game
+- `./gradlew :render:run` — play vs the bot (`--args="--watch"` for bot vs bot)
 
 ## Architecture
 - `sim/` — headless deterministic simulation. NO rendering, I/O, threads, wall-clock time or unseeded randomness.
-- `render/` — display + input, reads `sim` state only. Depends on `sim`, never the reverse.
+  `World.step(inputs)` returns `GameEvent`s; `World.state()` is an immutable `GameState` snapshot.
+- `bot/` — `Bot` = `GameState` → `CarInput`. `StrikerBot` is the hand-written baseline; its test checks a
+  success rate over seeded random starts, not single cases.
+- `render/` — Swing top-down view + keyboard (the keyboard is just another `Bot`). Depends on `bot` → `sim`, never the reverse.
 - `build-logic/` — shared Gradle conventions (`carball.java-conventions`). Versions live in `gradle/libs.versions.toml`.
 - Planned: a Gym-style bridge (`reset` / `step(actions)` → obs, reward, done) so Python can train bots.
 

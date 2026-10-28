@@ -10,12 +10,12 @@ final class CarPhysics {
     private static final double GROUND_EPSILON = 1e-6;
 
     private final CarSpec spec;
-    private final ArenaSpec arena;
+    private final ArenaBounds bounds;
     private final double gravity;
 
     CarPhysics(PhysicsConfig config) {
         this.spec = config.car();
-        this.arena = config.arena();
+        this.bounds = new ArenaBounds(config.arena());
         this.gravity = config.gravity();
     }
 
@@ -33,8 +33,11 @@ final class CarPhysics {
         double newSpeed =
                 clamp(nextForwardSpeed(forwardSpeed, input.throttle(), dt), -spec.maxSpeed(), spec.maxSpeed());
 
-        // Turning scales with speed, like a real car: no rotation at rest, mirrored in reverse.
-        double yaw = car.yaw() + input.steer() * spec.turnRate() * (newSpeed / spec.maxSpeed()) * dt;
+        // Yaw rate grows with speed up to fullTurnSpeed, then stays capped. The turning radius
+        // (speed / yaw rate) is therefore tight when slow and wide when fast, so braking helps to
+        // turn sharply. No rotation at rest, and steering is mirrored in reverse.
+        double turnFactor = Math.clamp(newSpeed / spec.fullTurnSpeed(), -1, 1);
+        double yaw = car.yaw() + input.steer() * spec.turnRate() * turnFactor * dt;
         Vec3 heading = new Vec3(Math.cos(yaw), Math.sin(yaw), 0);
 
         double verticalSpeed = input.jump() ? spec.jumpSpeed() : car.velocity().z();
@@ -60,17 +63,18 @@ final class CarPhysics {
             position = position.withZ(spec.radius());
             velocity = velocity.withZ(0);
         }
-        double maxX = arena.halfLength() - spec.radius();
-        if (Math.abs(position.x()) > maxX) {
-            position = position.withX(Math.copySign(maxX, position.x()));
+
+        ArenaBounds.Confined confined = bounds.confine(car.position(), position, spec.radius());
+        if (confined.hitEndWall()) {
             velocity = velocity.withX(0);
         }
-        double maxY = arena.halfWidth() - spec.radius();
-        if (Math.abs(position.y()) > maxY) {
-            position = position.withY(Math.copySign(maxY, position.y()));
+        if (confined.hitSideWall()) {
             velocity = velocity.withY(0);
         }
-        return new CarState(position, velocity, car.yaw());
+        if (confined.hitCeiling()) {
+            velocity = velocity.withZ(Math.min(0, velocity.z()));
+        }
+        return new CarState(confined.position(), velocity, car.yaw());
     }
 
     private static double clamp(double value, double min, double max) {

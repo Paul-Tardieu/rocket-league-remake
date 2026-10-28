@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":sim"))
+    implementation(project(":bot"))
 }
 
 application {

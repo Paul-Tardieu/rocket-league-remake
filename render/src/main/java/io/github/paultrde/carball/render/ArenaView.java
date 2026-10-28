@@ -3,12 +3,14 @@ package io.github.paultrde.carball.render;
 import io.github.paultrde.carball.sim.ArenaSpec;
 import io.github.paultrde.carball.sim.BallState;
 import io.github.paultrde.carball.sim.CarState;
+import io.github.paultrde.carball.sim.GameState;
 import io.github.paultrde.carball.sim.PhysicsConfig;
-import io.github.paultrde.carball.sim.World;
+import io.github.paultrde.carball.sim.Team;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -20,6 +22,7 @@ import java.awt.geom.Rectangle2D;
 import java.awt.geom.RoundRectangle2D;
 import java.io.Serial;
 import java.util.List;
+import java.util.Optional;
 import javax.swing.JPanel;
 
 /**
@@ -35,31 +38,46 @@ final class ArenaView extends JPanel {
     private static final Color LINES = new Color(255, 255, 255, 120);
     private static final Color SHADOW = new Color(0, 0, 0, 90);
     private static final Color BALL = new Color(0xECEFF1);
-    private static final Color CAR = new Color(0x1E88E5);
-    private static final Color CAR_NOSE = new Color(0xFFCA28);
+    private static final Color BLUE = new Color(0x1E88E5);
+    private static final Color ORANGE = new Color(0xFB8C00);
+    private static final Color CAR_NOSE = new Color(0xFFEB3B);
     private static final double HEIGHT_SHIFT = 0.6;
     private static final int MARGIN = 30;
+    private static final int SCORE_HEIGHT = 50;
     private static final int HUD_HEIGHT = 50;
 
     private final transient PhysicsConfig config;
-    private transient World world;
+    private final transient List<Team> carTeams;
+    private final String controlsHelp;
+    private transient GameState state;
+    private transient Optional<Team> goalBanner = Optional.empty();
 
-    ArenaView(PhysicsConfig config) {
+    /**
+     * @param carTeams team of each car, in the same order as {@link GameState#cars()}
+     * @param controlsHelp one line shown at the bottom of the window
+     */
+    ArenaView(PhysicsConfig config, List<Team> carTeams, String controlsHelp) {
         this.config = config;
-        setPreferredSize(new Dimension(1200, 950));
+        this.carTeams = List.copyOf(carTeams);
+        this.controlsHelp = controlsHelp;
+        setPreferredSize(new Dimension(1300, 950));
         setBackground(new Color(0x1B1B1B));
         setFocusable(true);
     }
 
-    void show(World snapshot) {
-        this.world = snapshot;
+    /**
+     * @param goalBanner team to celebrate on screen, if a goal was scored moments ago
+     */
+    void show(GameState snapshot, Optional<Team> goalBanner) {
+        this.state = snapshot;
+        this.goalBanner = goalBanner;
         repaint();
     }
 
     @Override
     protected void paintComponent(Graphics graphics) {
         super.paintComponent(graphics);
-        if (world == null) {
+        if (state == null) {
             return;
         }
         Graphics2D g = (Graphics2D) graphics.create();
@@ -67,22 +85,28 @@ final class ArenaView extends JPanel {
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             Projection projection = new Projection(config.arena(), getWidth(), getHeight());
             drawField(g, projection);
-            world.cars()
-                    .forEach(car -> drawShadow(
-                            g,
-                            projection,
-                            car.position().x(),
-                            car.position().y(),
-                            config.car().radius()));
+            for (CarState car : state.cars()) {
+                drawShadow(
+                        g,
+                        projection,
+                        car.position().x(),
+                        car.position().y(),
+                        config.car().radius());
+            }
+            BallState ball = state.ball();
             drawShadow(
                     g,
                     projection,
-                    world.ball().position().x(),
-                    world.ball().position().y(),
+                    ball.position().x(),
+                    ball.position().y(),
                     config.ball().radius());
-            world.cars().forEach(car -> drawCar(g, projection, car));
-            drawBall(g, projection, world.ball());
-            drawHud(g, world.cars(), world.ball());
+            for (int i = 0; i < state.cars().size(); i++) {
+                drawCar(g, projection, state.cars().get(i), colorOf(carTeams.get(i)));
+            }
+            drawBall(g, projection, ball);
+            drawScore(g);
+            drawHud(g);
+            goalBanner.ifPresent(team -> drawGoalBanner(g, team));
         } finally {
             g.dispose();
         }
@@ -90,19 +114,37 @@ final class ArenaView extends JPanel {
 
     private void drawField(Graphics2D g, Projection p) {
         ArenaSpec arena = config.arena();
-        Point2D topLeft = p.toScreen(-arena.halfLength(), arena.halfWidth(), 0);
-        double width = 2 * arena.halfLength() * p.scale();
-        double height = 2 * arena.halfWidth() * p.scale();
+        // BLUE defends the goal at -X, ORANGE the one at +X.
+        drawGoal(g, p, -1, BLUE);
+        drawGoal(g, p, 1, ORANGE);
 
+        Rectangle2D field = p.rectangle(-arena.halfLength(), arena.halfWidth(), arena.halfLength(), -arena.halfWidth());
         g.setColor(FLOOR);
-        g.fill(new Rectangle2D.Double(topLeft.getX(), topLeft.getY(), width, height));
+        g.fill(field);
         g.setColor(LINES);
         g.setStroke(new BasicStroke(3));
-        g.draw(new Rectangle2D.Double(topLeft.getX(), topLeft.getY(), width, height));
+        g.draw(field);
         Point2D centre = p.toScreen(0, 0, 0);
-        g.draw(new Line2D.Double(centre.getX(), topLeft.getY(), centre.getX(), topLeft.getY() + height));
+        g.draw(new Line2D.Double(centre.getX(), field.getMinY(), centre.getX(), field.getMaxY()));
         double circle = 1000 * p.scale();
         g.draw(new Ellipse2D.Double(centre.getX() - circle, centre.getY() - circle, 2 * circle, 2 * circle));
+    }
+
+    /** @param side -1 for the goal at -X, +1 for the goal at +X */
+    private void drawGoal(Graphics2D g, Projection p, int side, Color color) {
+        ArenaSpec arena = config.arena();
+        double goalLine = side * arena.halfLength();
+        double backWall = side * (arena.halfLength() + arena.goalDepth());
+        Rectangle2D net = p.rectangle(
+                Math.min(goalLine, backWall),
+                arena.goalHalfWidth(),
+                Math.max(goalLine, backWall),
+                -arena.goalHalfWidth());
+        g.setColor(color.darker());
+        g.fill(net);
+        g.setColor(color);
+        g.setStroke(new BasicStroke(3));
+        g.draw(net);
     }
 
     private void drawShadow(Graphics2D g, Projection p, double x, double y, double radius) {
@@ -120,7 +162,7 @@ final class ArenaView extends JPanel {
         g.fill(new Ellipse2D.Double(centre.getX() - r, centre.getY() - r, 2 * r, 2 * r));
     }
 
-    private void drawCar(Graphics2D g, Projection p, CarState car) {
+    private void drawCar(Graphics2D g, Projection p, CarState car, Color color) {
         double floorOffset = car.position().z() - config.car().radius();
         Point2D centre = p.toScreen(car.position().x(), car.position().y(), floorOffset);
         double length = 2.4 * config.car().radius() * p.scale();
@@ -129,43 +171,87 @@ final class ArenaView extends JPanel {
         AffineTransform saved = g.getTransform();
         g.translate(centre.getX(), centre.getY());
         g.rotate(-car.yaw()); // screen Y points down, so world counter-clockwise is screen clockwise
-        g.setColor(CAR);
+        g.setColor(color);
         g.fill(new RoundRectangle2D.Double(-length / 2, -width / 2, length, width, width / 2, width / 2));
         g.setColor(CAR_NOSE);
         g.fill(new Rectangle2D.Double(length / 2 - length / 5, -width / 2, length / 5, width));
         g.setTransform(saved);
     }
 
-    private void drawHud(Graphics2D g, List<CarState> cars, BallState ball) {
+    private void drawScore(Graphics2D g) {
+        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 28));
+        FontMetrics metrics = g.getFontMetrics();
+        String blue = "BLUE " + state.score().blue();
+        String orange = state.score().orange() + " ORANGE";
+        int centre = getWidth() / 2;
+        int baseline = SCORE_HEIGHT - 12;
+        g.setColor(BLUE);
+        g.drawString(blue, centre - 20 - metrics.stringWidth(blue), baseline);
+        g.setColor(Color.WHITE);
+        g.drawString("-", centre - metrics.stringWidth("-") / 2, baseline);
+        g.setColor(ORANGE);
+        g.drawString(orange, centre + 20, baseline);
+    }
+
+    private void drawHud(Graphics2D g) {
         g.setColor(Color.WHITE);
         g.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 14));
         int baseline = getHeight() - HUD_HEIGHT / 2;
-        String carText = cars.isEmpty()
-                ? ""
-                : "car speed %6.0f  ".formatted(cars.getFirst().velocity().length());
+        BallState ball = state.ball();
         g.drawString(
-                carText
-                        + "ball height %5.0f  speed %6.0f  |  tick %d"
-                                .formatted(ball.position().z(), ball.velocity().length(), world.tick()),
+                "ball height %5.0f  speed %6.0f  |  time %5.1fs"
+                        .formatted(ball.position().z(), ball.velocity().length(), state.tick() * config.tickSeconds()),
                 MARGIN,
                 baseline);
-        g.drawString("W/S throttle   A/D steer   SPACE jump   R reset", MARGIN, baseline + 18);
+        g.drawString(controlsHelp, MARGIN, baseline + 18);
     }
 
-    /** Maps world units (X right, Y up, Z height) to screen pixels, fitting the arena in the panel. */
+    private void drawGoalBanner(Graphics2D g, Team scorer) {
+        g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 72));
+        String text = scorer + " SCORES!";
+        int x = (getWidth() - g.getFontMetrics().stringWidth(text)) / 2;
+        int y = getHeight() / 2;
+        g.setColor(new Color(0, 0, 0, 140));
+        g.drawString(text, x + 4, y + 4);
+        g.setColor(colorOf(scorer));
+        g.drawString(text, x, y);
+    }
+
+    private static Color colorOf(Team team) {
+        return switch (team) {
+            case BLUE -> BLUE;
+            case ORANGE -> ORANGE;
+        };
+    }
+
+    /**
+     * Maps world units (X right, Y up, Z height) to screen pixels, fitting the arena and both nets
+     * in the panel.
+     */
     private record Projection(double scale, double centreX, double centreY) {
 
         Projection(ArenaSpec arena, int panelWidth, int panelHeight) {
             this(
                     Math.min(
-                            (panelWidth - 2.0 * MARGIN) / (2 * arena.halfLength()),
-                            (panelHeight - 2.0 * MARGIN - HUD_HEIGHT) / (2 * arena.halfWidth())),
+                            (panelWidth - 2.0 * MARGIN) / (2 * (arena.halfLength() + arena.goalDepth())),
+                            (panelHeight - 2.0 * MARGIN - SCORE_HEIGHT - HUD_HEIGHT) / (2 * arena.halfWidth())),
                     panelWidth / 2.0,
-                    (panelHeight - HUD_HEIGHT) / 2.0);
+                    SCORE_HEIGHT + (panelHeight - SCORE_HEIGHT - HUD_HEIGHT) / 2.0);
         }
 
         Point2D toScreen(double x, double y, double height) {
             return new Point2D.Double(centreX + x * scale, centreY - (y + height * HEIGHT_SHIFT) * scale);
+        }
+
+        /** Screen rectangle for the floor area between two world corners. */
+        Rectangle2D rectangle(double minX, double maxY, double maxX, double minY) {
+            Point2D topLeft = toScreen(minX, maxY, 0);
+            Point2D bottomRight = toScreen(maxX, minY, 0);
+            return new Rectangle2D.Double(
+                    topLeft.getX(),
+                    topLeft.getY(),
+                    bottomRight.getX() - topLeft.getX(),
+                    bottomRight.getY() - topLeft.getY());
         }
     }
 }

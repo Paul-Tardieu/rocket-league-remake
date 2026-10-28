@@ -8,7 +8,9 @@ package io.github.paultrde.carball.sim;
  * @param acceleration forward acceleration at full throttle, in units/s²
  * @param coastDeceleration deceleration with no throttle, in units/s²
  * @param maxSpeed top ground speed, in units/s
- * @param turnRate yaw rate at full steer and top speed, in rad/s
+ * @param turnRate max yaw rate at full steer, in rad/s
+ * @param fullTurnSpeed speed from which the full turn rate is available; below it the car turns
+ *     proportionally less, so it cannot spin on the spot
  * @param jumpSpeed vertical speed given by a jump, in units/s
  */
 public record CarSpec(
@@ -18,9 +20,10 @@ public record CarSpec(
         double coastDeceleration,
         double maxSpeed,
         double turnRate,
+        double fullTurnSpeed,
         double jumpSpeed) {
 
-    public static final CarSpec DEFAULT = new CarSpec(60, 180, 1600, 500, 2300, 3, 500);
+    public static final CarSpec DEFAULT = new CarSpec(60, 180, 1600, 500, 2300, 3, 600, 500);
 
     public CarSpec {
         Checks.positive("radius", radius);
@@ -29,6 +32,7 @@ public record CarSpec(
         Checks.positive("coastDeceleration", coastDeceleration);
         Checks.positive("maxSpeed", maxSpeed);
         Checks.positive("turnRate", turnRate);
+        Checks.positive("fullTurnSpeed", fullTurnSpeed);
         Checks.positive("jumpSpeed", jumpSpeed);
     }
 }

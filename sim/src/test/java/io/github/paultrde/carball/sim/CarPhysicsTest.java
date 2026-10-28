@@ -57,11 +57,20 @@ class CarPhysicsTest {
     }
 
     @Test
-    void stopsAtTheEndWall() {
+    void drivesIntoTheGoalAndStopsAtTheBackOfTheNet() {
         CarState car = run(PARKED, new CarInput(1, 0, false), 10);
 
-        double wallLimit = PhysicsConfig.DEFAULT.arena().halfLength() - SPEC.radius();
-        assertThat(car.position().x()).isEqualTo(wallLimit);
+        ArenaSpec arena = PhysicsConfig.DEFAULT.arena();
+        assertThat(car.position().x()).isEqualTo(arena.halfLength() + arena.goalDepth() - SPEC.radius());
+    }
+
+    @Test
+    void stopsAtTheEndWallOutsideTheGoal() {
+        CarState besideGoal = new CarState(new Vec3(0, 2000, SPEC.radius()), Vec3.ZERO, 0);
+
+        CarState car = run(besideGoal, new CarInput(1, 0, false), 10);
+
+        assertThat(car.position().x()).isEqualTo(PhysicsConfig.DEFAULT.arena().halfLength() - SPEC.radius());
     }
 
     private CarState run(CarState start, CarInput input, double seconds) {

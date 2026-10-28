@@ -3,7 +3,7 @@ package io.github.paultrde.carball.sim;
 /** Sphere-vs-sphere contact between a car hitbox and the ball, resolved with an impulse. */
 final class Collisions {
 
-    record CarBallResult(CarState car, BallState ball) {}
+    record CarBallResult(CarState car, BallState ball, boolean touched) {}
 
     private Collisions() {}
 
@@ -12,7 +12,7 @@ final class Collisions {
         double distance = delta.length();
         double penetration = carSpec.radius() + ballSpec.radius() - distance;
         if (penetration <= 0 || distance == 0) {
-            return new CarBallResult(car, ball);
+            return new CarBallResult(car, ball, false);
         }
 
         Vec3 normal = delta.times(1 / distance); // from car towards ball
@@ -36,6 +36,6 @@ final class Collisions {
         }
 
         return new CarBallResult(
-                new CarState(carPosition, carVelocity, car.yaw()), new BallState(ballPosition, ballVelocity));
+                new CarState(carPosition, carVelocity, car.yaw()), new BallState(ballPosition, ballVelocity), true);
     }
 }

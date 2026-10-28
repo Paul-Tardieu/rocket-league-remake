@@ -10,4 +10,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "carball"
 
-include("sim", "render")
+include("sim", "bot", "render")

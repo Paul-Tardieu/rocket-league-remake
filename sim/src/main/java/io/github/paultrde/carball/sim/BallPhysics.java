@@ -3,18 +3,20 @@ package io.github.paultrde.carball.sim;
 final class BallPhysics {
 
     private final BallSpec spec;
-    private final ArenaSpec arena;
+    private final ArenaBounds bounds;
     private final double gravity;
 
     BallPhysics(PhysicsConfig config) {
         this.spec = config.ball();
-        this.arena = config.arena();
+        this.bounds = new ArenaBounds(config.arena());
         this.gravity = config.gravity();
     }
 
     /** Semi-implicit Euler: update velocity first, then move with the new velocity. */
     BallState step(BallState ball, double dt) {
-        Vec3 velocity = ball.velocity().plus(new Vec3(0, 0, gravity * dt));
+        // Linear drag: losing a fixed fraction per second makes fast balls slow down quickly and
+        // slow balls drift to a stop, without ever reversing direction.
+        Vec3 velocity = ball.velocity().times(1 - spec.drag() * dt).plus(new Vec3(0, 0, gravity * dt));
         Vec3 position = ball.position().plus(velocity.times(dt));
 
         if (position.z() < spec.radius()) {
@@ -26,16 +28,17 @@ final class BallPhysics {
             velocity = velocity.withZ(resting ? 0 : bounceSpeed);
         }
 
-        double maxX = arena.halfLength() - spec.radius();
-        if (Math.abs(position.x()) > maxX) {
-            position = position.withX(Math.copySign(maxX, position.x()));
-            velocity = velocity.withX(-velocity.x() * spec.restitution());
+        ArenaBounds.Confined confined = bounds.confine(ball.position(), position, spec.radius());
+        double bounce = -spec.restitution();
+        if (confined.hitEndWall()) {
+            velocity = velocity.withX(velocity.x() * bounce);
         }
-        double maxY = arena.halfWidth() - spec.radius();
-        if (Math.abs(position.y()) > maxY) {
-            position = position.withY(Math.copySign(maxY, position.y()));
-            velocity = velocity.withY(-velocity.y() * spec.restitution());
+        if (confined.hitSideWall()) {
+            velocity = velocity.withY(velocity.y() * bounce);
         }
-        return new BallState(position, velocity);
+        if (confined.hitCeiling()) {
+            velocity = velocity.withZ(velocity.z() * bounce);
+        }
+        return new BallState(confined.position(), velocity);
     }
 }
