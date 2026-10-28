@@ -4,8 +4,10 @@ import io.github.paultrde.carball.sim.ArenaSpec;
 import io.github.paultrde.carball.sim.CarInput;
 import io.github.paultrde.carball.sim.CarState;
 import io.github.paultrde.carball.sim.GameState;
+import io.github.paultrde.carball.sim.PhysicsConfig;
 import io.github.paultrde.carball.sim.Team;
 import io.github.paultrde.carball.sim.Vec3;
+import java.util.Random;
 
 /**
  * Hand-written baseline: get behind the ball, then drive through it towards the opponent goal.
@@ -14,6 +16,13 @@ import io.github.paultrde.carball.sim.Vec3;
  * to come from. Instead the bot aims at a point behind the ball on the goal-to-ball line, and that
  * point slides onto the ball as the car gets closer. When the car is on the wrong side of the ball,
  * it first swings wide around it so it does not knock the ball towards its own goal on the way.
+ *
+ * <p>When the ball is in the air the bot plays where it will land, not where it is, and paces itself
+ * to get there as it comes down instead of circling underneath it.
+ *
+ * <p>A little seeded noise is added to the steering. Two identical deterministic bots facing a
+ * mirror-symmetric kickoff would otherwise mirror each other forever; the noise breaks the tie
+ * while keeping every match reproducible from its seeds.
  */
 public final class StrikerBot implements Bot {
 
@@ -38,21 +47,56 @@ public final class StrikerBot implements Bot {
     /** Keeps aim points this far from the walls so the car does not grind along them. */
     private static final double WALL_MARGIN = 250;
 
+    /** Standard deviation of the random steering error added every tick. */
+    private static final double STEER_NOISE = 0.05;
+    /** Below this time to landing the ball counts as playable now; no need to pace the approach. */
+    private static final double PLAYABLE_SECONDS = 0.3;
+
     private final int carIndex;
     private final ArenaSpec arena;
+    private final BallPrediction prediction;
     private final Vec3 targetGoal;
+    private final Random random;
 
-    public StrikerBot(int carIndex, Team team, ArenaSpec arena) {
+    /** @param seed seeds the steering noise; give each bot its own seed */
+    public StrikerBot(int carIndex, Team team, PhysicsConfig config, long seed) {
         this.carIndex = carIndex;
-        this.arena = arena;
+        this.arena = config.arena();
+        this.prediction = new BallPrediction(config);
         this.targetGoal = new Vec3(team.attackSign() * arena.halfLength(), 0, 0);
+        this.random = new Random(seed);
     }
 
     @Override
     public CarInput act(GameState state) {
         CarState car = state.cars().get(carIndex);
-        Vec3 aim = chooseAim(flat(car.position()), flat(state.ball().position()));
-        return driveTowards(car, aim);
+        BallPrediction.Landing landing = prediction.landing(state.ball());
+        Vec3 aim = chooseAim(flat(car.position()), flat(landing.position()));
+        CarInput input = withSteerNoise(driveTowards(car, aim));
+        return landing.seconds() > PLAYABLE_SECONDS ? paceArrival(car, aim, landing.seconds(), input) : input;
+    }
+
+    private CarInput withSteerNoise(CarInput input) {
+        double steer = Math.clamp(input.steer() + random.nextGaussian() * STEER_NOISE, -1, 1);
+        return new CarInput(input.throttle(), steer, input.jump());
+    }
+
+    /**
+     * Arriving early under a falling ball is useless: the car overshoots and has to loop back. So
+     * cap the speed at what reaches the aim just as the ball lands, coasting or braking if faster.
+     */
+    private static CarInput paceArrival(CarState car, Vec3 aim, double secondsToLanding, CarInput input) {
+        if (input.throttle() <= 0) {
+            return input;
+        }
+        double distance = flat(aim).minus(flat(car.position())).length();
+        double neededSpeed = distance / secondsToLanding;
+        double forwardSpeed = car.velocity().dot(car.forward());
+        if (forwardSpeed <= neededSpeed) {
+            return input;
+        }
+        double throttle = forwardSpeed > neededSpeed + CORNERING_SPEED ? -1 : 0;
+        return new CarInput(throttle, input.steer(), false);
     }
 
     private Vec3 chooseAim(Vec3 car, Vec3 ball) {

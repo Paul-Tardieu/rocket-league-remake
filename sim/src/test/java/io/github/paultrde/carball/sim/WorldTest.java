@@ -2,6 +2,7 @@ package io.github.paultrde.carball.sim;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.within;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -105,6 +106,28 @@ class WorldTest {
 
         assertThat(world.state().score()).isEqualTo(Score.ZERO);
         assertThat(world.state().tick()).isZero();
+    }
+
+    @Test
+    void headOnKickoffIsFairAndKeepsTheBallUnderTheCeiling() {
+        BallState centre = new BallState(new Vec3(0, 0, CONFIG.ball().radius()), Vec3.ZERO);
+        double z = CONFIG.car().radius();
+        World world = new World(
+                CONFIG,
+                centre,
+                List.of(
+                        new CarState(new Vec3(-2500, 0, z), Vec3.ZERO, 0),
+                        new CarState(new Vec3(2500, 0, z), Vec3.ZERO, Math.PI)));
+        List<CarInput> bothFullThrottle = List.of(new CarInput(1, 0, false), new CarInput(1, 0, false));
+
+        for (int i = 0; i < 5 * CONFIG.ticksPerSecond(); i++) {
+            world.step(bothFullThrottle);
+            assertThat(world.state().ball().position().z())
+                    .isLessThanOrEqualTo(ARENA.ceilingHeight() - CONFIG.ball().radius());
+        }
+
+        // Neither car gets an edge from being first in the list: the squeezed ball goes straight up.
+        assertThat(world.state().ball().position().x()).isCloseTo(0, within(1e-6));
     }
 
     @Test

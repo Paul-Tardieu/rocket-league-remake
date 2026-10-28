@@ -6,6 +6,7 @@ import io.github.paultrde.carball.sim.ArenaSpec;
 import io.github.paultrde.carball.sim.BallState;
 import io.github.paultrde.carball.sim.CarState;
 import io.github.paultrde.carball.sim.GameEvent;
+import io.github.paultrde.carball.sim.GameState;
 import io.github.paultrde.carball.sim.PhysicsConfig;
 import io.github.paultrde.carball.sim.Team;
 import io.github.paultrde.carball.sim.Vec3;
@@ -25,14 +26,14 @@ class StrikerBotTest {
     void scoresFromKickoff() {
         World world = new World(CONFIG, ballAt(0, 0), List.of(carAt(-2000, 0, 0)));
 
-        assertThat(firstGoal(world, new StrikerBot(0, Team.BLUE, ARENA))).contains(Team.BLUE);
+        assertThat(firstGoal(world, new StrikerBot(0, Team.BLUE, CONFIG, 1))).contains(Team.BLUE);
     }
 
     @Test
     void orangeBotAttacksTheOtherWay() {
         World world = new World(CONFIG, ballAt(0, 0), List.of(carAt(2000, 0, Math.PI)));
 
-        assertThat(firstGoal(world, new StrikerBot(0, Team.ORANGE, ARENA))).contains(Team.ORANGE);
+        assertThat(firstGoal(world, new StrikerBot(0, Team.ORANGE, CONFIG, 1))).contains(Team.ORANGE);
     }
 
     /**
@@ -51,7 +52,7 @@ class StrikerBotTest {
                     CONFIG,
                     ballAt(randomX(random), randomY(random)),
                     List.of(carAt(randomX(random), randomY(random), random.nextDouble() * 2 * Math.PI)));
-            Optional<Team> scorer = firstGoal(world, new StrikerBot(0, Team.BLUE, ARENA));
+            Optional<Team> scorer = firstGoal(world, new StrikerBot(0, Team.BLUE, CONFIG, run));
             if (scorer.equals(Optional.of(Team.BLUE))) {
                 goals++;
             } else if (scorer.isPresent()) {
@@ -61,6 +62,36 @@ class StrikerBotTest {
 
         assertThat(goals).as("goals out of %d starts", runs).isGreaterThanOrEqualTo(80);
         assertThat(ownGoals).as("own goals out of %d starts", runs).isLessThanOrEqualTo(2);
+    }
+
+    /** Regression test for a symmetric kickoff where both bots mirrored each other and circled. */
+    @Test
+    void botVersusBotMatchKeepsTheBallInsideAndBothTeamsScore() {
+        double z = CONFIG.car().radius();
+        World world = new World(
+                CONFIG,
+                ballAt(0, 0),
+                List.of(
+                        new CarState(new Vec3(-2500, 0, z), Vec3.ZERO, 0),
+                        new CarState(new Vec3(2500, 0, z), Vec3.ZERO, Math.PI)));
+        List<Bot> bots = List.of(new StrikerBot(0, Team.BLUE, CONFIG, 1), new StrikerBot(1, Team.ORANGE, CONFIG, 2));
+
+        for (int tick = 0; tick < 300 * CONFIG.ticksPerSecond(); tick++) {
+            GameState state = world.state();
+            world.step(bots.stream().map(bot -> bot.act(state)).toList());
+            assertInsideArena(world.state().ball().position());
+        }
+
+        assertThat(world.state().score().blue()).isPositive();
+        assertThat(world.state().score().orange()).isPositive();
+    }
+
+    private static void assertInsideArena(Vec3 ball) {
+        double r = CONFIG.ball().radius();
+        double tolerance = 1e-6;
+        assertThat(Math.abs(ball.y())).isLessThanOrEqualTo(ARENA.halfWidth() - r + tolerance);
+        assertThat(Math.abs(ball.x())).isLessThanOrEqualTo(ARENA.halfLength() + ARENA.goalDepth() - r + tolerance);
+        assertThat(ball.z()).isBetween(r - tolerance, ARENA.ceilingHeight() - r + tolerance);
     }
 
     private static Optional<Team> firstGoal(World world, Bot bot) {

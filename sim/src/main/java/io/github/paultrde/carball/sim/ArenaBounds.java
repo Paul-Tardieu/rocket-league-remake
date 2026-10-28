@@ -58,6 +58,11 @@ final class ArenaBounds {
             y = Math.copySign(sideWall, y);
             hitSide = true;
         }
+        double ceiling = arena.ceilingHeight() - radius;
+        if (z > ceiling) {
+            z = ceiling;
+            hitCeiling = true;
+        }
         return new Confined(new Vec3(x, y, z), hitEnd, hitSide, hitCeiling);
     }
 

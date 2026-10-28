@@ -19,7 +19,8 @@ import javax.swing.Timer;
 
 /**
  * Desktop entry point: you (BLUE, keyboard) against a {@link StrikerBot} (ORANGE). Run with
- * {@code --watch} to watch two bots play each other instead.
+ * {@code --watch} to watch two bots play each other instead, and {@code --speed=N} to run the
+ * simulation N times faster than real time.
  *
  * <p>Everything runs on the Swing event thread (the Timer fires there too), so the world is never
  * touched by two threads at once.
@@ -35,15 +36,17 @@ public final class Main {
     private final List<Bot> controllers;
     private final ArenaView view;
     private final World world;
+    private final double speed;
     private long lastFrameNanos = System.nanoTime();
     private double unsimulatedSeconds;
     private Optional<Team> lastScorer = Optional.empty();
     private double bannerSecondsLeft;
 
-    private Main(boolean watchBots) {
+    private Main(boolean watchBots, double speed) {
+        this.speed = speed;
         // The keyboard is just another Bot: something that turns a GameState into a CarInput.
-        Bot blue = watchBots ? new StrikerBot(0, Team.BLUE, config.arena()) : state -> keyboard.current();
-        Bot orange = new StrikerBot(1, Team.ORANGE, config.arena());
+        Bot blue = watchBots ? new StrikerBot(0, Team.BLUE, config, 1) : state -> keyboard.current();
+        Bot orange = new StrikerBot(1, Team.ORANGE, config, 2);
         this.controllers = List.of(blue, orange);
         String help =
                 watchBots ? "Bot vs bot   R reset" : "You are BLUE   W/S throttle   A/D steer   SPACE jump   R reset";
@@ -53,7 +56,15 @@ public final class Main {
 
     public static void main(String[] args) {
         boolean watchBots = List.of(args).contains("--watch");
-        SwingUtilities.invokeLater(() -> new Main(watchBots).start());
+        double speed = List.of(args).stream()
+                .filter(arg -> arg.startsWith("--speed="))
+                .mapToDouble(arg -> Double.parseDouble(arg.substring("--speed=".length())))
+                .findFirst()
+                .orElse(1);
+        if (!(speed > 0)) {
+            throw new IllegalArgumentException("--speed must be positive: " + speed);
+        }
+        SwingUtilities.invokeLater(() -> new Main(watchBots, speed).start());
     }
 
     private void start() {
@@ -77,7 +88,8 @@ public final class Main {
         long now = System.nanoTime();
         // Cap the catch-up so a long pause (debugger, window drag) does not trigger a burst of ticks.
         double elapsed = Math.min((now - lastFrameNanos) / 1e9, 0.25);
-        unsimulatedSeconds += elapsed;
+        // Speeding up only banks more simulated time per real second; each tick stays identical.
+        unsimulatedSeconds += elapsed * speed;
         lastFrameNanos = now;
         bannerSecondsLeft = Math.max(0, bannerSecondsLeft - elapsed);
 

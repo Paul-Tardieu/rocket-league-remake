@@ -42,18 +42,24 @@ public final class World {
         double dt = config.tickSeconds();
         List<GameEvent> events = new ArrayList<>();
 
-        BallState nextBall = ballPhysics.step(ball, dt);
+        // Every car is resolved against the same ball and the effects on the ball are summed. Applying
+        // contacts one after another would let car 0 always act first, a bias bots could learn.
+        BallState movedBall = ballPhysics.step(ball, dt);
+        Vec3 ballPush = Vec3.ZERO;
+        Vec3 ballKick = Vec3.ZERO;
         List<CarState> nextCars = new ArrayList<>(cars.size());
         for (int i = 0; i < cars.size(); i++) {
             CarState car = carPhysics.step(cars.get(i), inputs.get(i), dt);
-            Collisions.CarBallResult contact = Collisions.carBall(car, config.car(), nextBall, config.ball());
+            Collisions.CarBallResult contact = Collisions.carBall(car, config.car(), movedBall, config.ball());
             if (contact.touched()) {
                 events.add(new GameEvent.BallTouched(i));
+                ballPush = ballPush.plus(contact.ball().position().minus(movedBall.position()));
+                ballKick = ballKick.plus(contact.ball().velocity().minus(movedBall.velocity()));
             }
-            nextBall = contact.ball();
             nextCars.add(contact.car());
         }
-        ball = nextBall;
+        ball = new BallState(
+                movedBall.position().plus(ballPush), movedBall.velocity().plus(ballKick));
         cars = List.copyOf(nextCars);
         tick++;
 

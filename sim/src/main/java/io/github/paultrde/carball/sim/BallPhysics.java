@@ -16,7 +16,7 @@ final class BallPhysics {
     BallState step(BallState ball, double dt) {
         // Linear drag: losing a fixed fraction per second makes fast balls slow down quickly and
         // slow balls drift to a stop, without ever reversing direction.
-        Vec3 velocity = ball.velocity().times(1 - spec.drag() * dt).plus(new Vec3(0, 0, gravity * dt));
+        Vec3 velocity = capSpeed(ball.velocity()).times(1 - spec.drag() * dt).plus(new Vec3(0, 0, gravity * dt));
         Vec3 position = ball.position().plus(velocity.times(dt));
 
         if (position.z() < spec.radius()) {
@@ -40,5 +40,15 @@ final class BallPhysics {
             velocity = velocity.withZ(velocity.z() * bounce);
         }
         return new BallState(confined.position(), velocity);
+    }
+
+    /**
+     * Collisions are resolved one car at a time, so a ball squeezed between two cars can be bounced
+     * back and forth within a few ticks and pick up far more speed than either car had. Capping the
+     * speed bounds that energy gain; it is also a gameplay knob.
+     */
+    private Vec3 capSpeed(Vec3 velocity) {
+        double speed = velocity.length();
+        return speed > spec.maxSpeed() ? velocity.times(spec.maxSpeed() / speed) : velocity;
     }
 }

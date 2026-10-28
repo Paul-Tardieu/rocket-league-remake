@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 class BallPhysicsTest {
 
-    private static final BallSpec NO_DRAG = new BallSpec(92, 30, 0.6, 0);
+    private static final BallSpec NO_DRAG = new BallSpec(92, 30, 0.6, 0, 6000);
     private static final PhysicsConfig CONFIG =
             new PhysicsConfig(120, -650, ArenaSpec.DEFAULT, NO_DRAG, CarSpec.DEFAULT);
     private static final double DT = CONFIG.tickSeconds();
@@ -22,6 +22,28 @@ class BallPhysicsTest {
 
         assertThat(bounced.position().y()).isEqualTo(wallLimit);
         assertThat(bounced.velocity().y()).isEqualTo(-1000 * NO_DRAG.restitution());
+    }
+
+    @Test
+    void bouncesOffTheCeiling() {
+        BallPhysics physics = new BallPhysics(CONFIG);
+        double ceiling = CONFIG.arena().ceilingHeight() - NO_DRAG.radius();
+        BallState risingFast = new BallState(new Vec3(0, 0, ceiling - 1), new Vec3(0, 0, 3000));
+
+        BallState bounced = physics.step(risingFast, DT);
+
+        assertThat(bounced.position().z()).isEqualTo(ceiling);
+        assertThat(bounced.velocity().z()).isNegative();
+    }
+
+    @Test
+    void capsBallSpeed() {
+        BallPhysics physics = new BallPhysics(CONFIG);
+        BallState tooFast = new BallState(new Vec3(0, 0, 1000), new Vec3(20_000, 0, 0));
+
+        BallState capped = physics.step(tooFast, DT);
+
+        assertThat(capped.velocity().length()).isLessThanOrEqualTo(NO_DRAG.maxSpeed() + 10);
     }
 
     @Test
