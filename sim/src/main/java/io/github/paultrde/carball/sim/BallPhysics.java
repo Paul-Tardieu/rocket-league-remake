@@ -3,11 +3,13 @@ package io.github.paultrde.carball.sim;
 final class BallPhysics {
 
     private final BallSpec spec;
+    private final ArenaSpec arena;
     private final double gravity;
 
-    BallPhysics(BallSpec spec, double gravity) {
-        this.spec = spec;
-        this.gravity = gravity;
+    BallPhysics(PhysicsConfig config) {
+        this.spec = config.ball();
+        this.arena = config.arena();
+        this.gravity = config.gravity();
     }
 
     /** Semi-implicit Euler: update velocity first, then move with the new velocity. */
@@ -22,6 +24,17 @@ final class BallPhysics {
             // contact, otherwise the ball jitters on the floor forever.
             boolean resting = bounceSpeed < 2 * Math.abs(gravity) * dt;
             velocity = velocity.withZ(resting ? 0 : bounceSpeed);
+        }
+
+        double maxX = arena.halfLength() - spec.radius();
+        if (Math.abs(position.x()) > maxX) {
+            position = position.withX(Math.copySign(maxX, position.x()));
+            velocity = velocity.withX(-velocity.x() * spec.restitution());
+        }
+        double maxY = arena.halfWidth() - spec.radius();
+        if (Math.abs(position.y()) > maxY) {
+            position = position.withY(Math.copySign(maxY, position.y()));
+            velocity = velocity.withY(-velocity.y() * spec.restitution());
         }
         return new BallState(position, velocity);
     }

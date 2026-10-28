@@ -11,11 +11,11 @@ class CarPhysicsTest {
     private static final double DT = PhysicsConfig.DEFAULT.tickSeconds();
     private static final CarState PARKED = new CarState(new Vec3(0, 0, SPEC.radius()), Vec3.ZERO, 0);
 
-    private final CarPhysics physics = new CarPhysics(SPEC, PhysicsConfig.DEFAULT.gravity());
+    private final CarPhysics physics = new CarPhysics(PhysicsConfig.DEFAULT);
 
     @Test
     void fullThrottleNeverExceedsMaxSpeed() {
-        CarState car = run(PARKED, new CarInput(1, 0, false), 10);
+        CarState car = run(PARKED, new CarInput(1, 0, false), 2);
 
         assertThat(car.velocity().length()).isCloseTo(SPEC.maxSpeed(), within(1e-9));
         assertThat(car.velocity().x()).isPositive();
@@ -54,6 +54,14 @@ class CarPhysicsTest {
         CarState stillJumping = physics.step(airborne, new CarInput(0, 0, true), DT);
 
         assertThat(stillJumping.velocity().z()).isLessThan(airborne.velocity().z());
+    }
+
+    @Test
+    void stopsAtTheEndWall() {
+        CarState car = run(PARKED, new CarInput(1, 0, false), 10);
+
+        double wallLimit = PhysicsConfig.DEFAULT.arena().halfLength() - SPEC.radius();
+        assertThat(car.position().x()).isEqualTo(wallLimit);
     }
 
     private CarState run(CarState start, CarInput input, double seconds) {

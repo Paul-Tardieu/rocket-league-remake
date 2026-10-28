@@ -18,8 +18,8 @@ public final class World {
 
     public World(PhysicsConfig config, BallState initialBall, List<CarState> initialCars) {
         this.config = config;
-        this.ballPhysics = new BallPhysics(config.ball(), config.gravity());
-        this.carPhysics = new CarPhysics(config.car(), config.gravity());
+        this.ballPhysics = new BallPhysics(config);
+        this.carPhysics = new CarPhysics(config);
         this.ball = initialBall;
         this.cars = List.copyOf(initialCars);
     }

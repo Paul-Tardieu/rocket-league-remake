@@ -10,16 +10,18 @@ final class CarPhysics {
     private static final double GROUND_EPSILON = 1e-6;
 
     private final CarSpec spec;
+    private final ArenaSpec arena;
     private final double gravity;
 
-    CarPhysics(CarSpec spec, double gravity) {
-        this.spec = spec;
-        this.gravity = gravity;
+    CarPhysics(PhysicsConfig config) {
+        this.spec = config.car();
+        this.arena = config.arena();
+        this.gravity = config.gravity();
     }
 
     CarState step(CarState car, CarInput input, double dt) {
         CarState driven = isGrounded(car) ? drive(car, input, dt) : car;
-        return applyGravityAndFloor(driven, dt);
+        return integrate(driven, dt);
     }
 
     boolean isGrounded(CarState car) {
@@ -49,13 +51,24 @@ final class CarPhysics {
         return Math.signum(speed) * Math.max(0, Math.abs(speed) - slowdown);
     }
 
-    private CarState applyGravityAndFloor(CarState car, double dt) {
+    /** Moves the car, then keeps it inside the arena. Walls stop the car dead: no bounce. */
+    private CarState integrate(CarState car, double dt) {
         Vec3 velocity = car.velocity().plus(new Vec3(0, 0, gravity * dt));
         Vec3 position = car.position().plus(velocity.times(dt));
 
         if (position.z() < spec.radius()) {
             position = position.withZ(spec.radius());
             velocity = velocity.withZ(0);
+        }
+        double maxX = arena.halfLength() - spec.radius();
+        if (Math.abs(position.x()) > maxX) {
+            position = position.withX(Math.copySign(maxX, position.x()));
+            velocity = velocity.withX(0);
+        }
+        double maxY = arena.halfWidth() - spec.radius();
+        if (Math.abs(position.y()) > maxY) {
+            position = position.withY(Math.copySign(maxY, position.y()));
+            velocity = velocity.withY(0);
         }
         return new CarState(position, velocity, car.yaw());
     }

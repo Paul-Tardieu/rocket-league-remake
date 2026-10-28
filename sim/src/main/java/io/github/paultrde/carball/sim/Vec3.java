@@ -25,6 +25,14 @@ public record Vec3(double x, double y, double z) {
         return Math.sqrt(dot(this));
     }
 
+    public Vec3 withX(double newX) {
+        return new Vec3(newX, y, z);
+    }
+
+    public Vec3 withY(double newY) {
+        return new Vec3(x, newY, z);
+    }
+
     public Vec3 withZ(double newZ) {
         return new Vec3(x, y, newZ);
     }
