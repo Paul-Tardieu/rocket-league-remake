@@ -82,12 +82,8 @@ def reward_curve(log: Path) -> list:
     return [[s, r] for s, r in zip(steps, rewards)]
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--seconds", type=float, default=60)
-    parser.add_argument("--log", type=Path, default=HERE / "data" / "train.log")
-    args = parser.parse_args()
-
+def record(seconds: float, log: Path) -> dict:
+    """Plays the latest checkpoint and random play for `seconds` each; returns the replay data."""
     env = build_env()
     folder = latest_checkpoint()
     policy = load_policy(folder, env.observation_space.shape[0], env.action_space.n)
@@ -100,27 +96,41 @@ def main():
     def random(obs):
         return rng.integers(0, env.action_space.n, size=(len(obs), 1))
 
-    frames, touches, goals = play(env, trained, args.seconds, record=True)
-    _, random_touches, random_goals = play(env, random, args.seconds, record=False)
-    out = {
+    frames, touches, goals = play(env, trained, seconds, record=True)
+    _, random_touches, random_goals = play(env, random, seconds, record=False)
+    env.close()
+    return {
         "checkpoint_timesteps": int(folder.name),
         "seconds_per_frame": ACTION_REPEAT_TICKS / TICKS_PER_SECOND,
         "frames": frames,
         "stats": {
-            "seconds": args.seconds,
+            "seconds": seconds,
             "trained": {"touches": touches, "goals": goals},
             "random": {"touches": random_touches, "goals": random_goals},
         },
-        "reward_curve": reward_curve(args.log),
+        "reward_curve": reward_curve(log),
     }
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--seconds", type=float, default=60)
+    parser.add_argument("--log", type=Path, default=HERE / "data" / "train.log")
+    args = parser.parse_args()
+
+    out = record(args.seconds, args.log)
+    trained, random = out["stats"]["trained"], out["stats"]["random"]
     payload = json.dumps(out, separators=(",", ":"))
     (HERE / "data" / "replay.json").write_text(payload)
     # "</" would end the <script> tag that embeds the data in the page.
     page = (HERE / "viewer_template.html").read_text().replace("__REPLAY_JSON__", payload.replace("</", "<\\/"))
     path = HERE / "data" / "replay.html"
     path.write_text(page)
-    print(f"checkpoint {folder.name} steps -> {path} (open it in a browser)")
-    print(f"{args.seconds:.0f}s of play: trained bot {touches} touches / {goals} goals, random {random_touches} / {random_goals}")
+    print(f"checkpoint {out['checkpoint_timesteps']} steps -> {path} (open it in a browser)")
+    print(
+        f"{args.seconds:.0f}s of play: trained bot {trained['touches']} touches / {trained['goals']} goals, "
+        f"random {random['touches']} / {random['goals']}"
+    )
 
 
 if __name__ == "__main__":

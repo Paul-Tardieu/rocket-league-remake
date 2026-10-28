@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bot Rocket League</title>
+<meta name="description" content="Entraînement par renforcement d'un bot Rocket League, suivi en direct.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<style>
+/* A pitch-side analyst screen: status and headline numbers first, learning curves, then the latest replay. */
+:root {
+  --bg: #0f1418;
+  --panel: #171e24;
+  --line: #2a343d;
+  --ink: #e7edf1;
+  --muted: #8d9aa5;
+  --turf: #1e4a2c;
+  --turf-alt: #21512f;
+  --blue: #3d8bfd;
+  --orange: #ff8a2a;
+  --accent: #c8f05a;
+  --good: #4cc38a;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 1100px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: grid; gap: 8px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(34px, 7vw, 56px); letter-spacing: 0.02em; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 26px; letter-spacing: 0.03em; margin: 12px 0 0; }
+h3 { font-family: var(--font-display); font-weight: 600; font-size: 20px; letter-spacing: 0.03em; margin: 0; }
+a { color: var(--accent); }
+.sub { color: var(--muted); margin: 0; max-width: 72ch; line-height: 1.5; }
+.data { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--muted); font-size: 14px; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); font-weight: 500; }
+.pill::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.pill.on::before { background: var(--good); box-shadow: 0 0 0 4px rgb(76 195 138 / 0.18); animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 7px rgb(76 195 138 / 0.05); } }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.tile .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+.tile .value { font-family: var(--font-display); font-size: 38px; font-weight: 700; line-height: 1.1; }
+.tile .vs { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 12px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; min-width: 0; }
+.note { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0; }
+.chart { position: relative; }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; touch-action: pan-y; }
+.tip { position: absolute; pointer-events: none; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 12px; white-space: nowrap; }
+canvas { width: 100%; height: auto; display: block; border-radius: 6px; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+button {
+  font: 500 14px var(--font-body); color: var(--ink); background: var(--line); border: 1px solid transparent;
+  border-radius: 6px; padding: 7px 12px; cursor: pointer;
+}
+button[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scrub { flex: 1 1 220px; position: relative; min-width: 0; }
+.scrub input { width: 100%; accent-color: var(--accent); }
+.marks { position: absolute; inset: auto 0 -4px 0; height: 6px; pointer-events: none; }
+.marks span { position: absolute; width: 3px; height: 6px; background: var(--ink); border-radius: 2px; }
+.time { color: var(--muted); font-size: 13px; min-width: 9ch; text-align: right; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: 13px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.empty { color: var(--muted); padding: 24px 0; text-align: center; }
+footer { color: var(--muted); font-size: 13px; line-height: 1.6; border-top: 1px solid var(--line); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { .pill.on::before { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Bot Rocket League</h1>
+    <p class="sub">Un bot apprend Rocket League tout seul, par essais et erreurs (apprentissage par renforcement, algorithme PPO),
+      dans RocketSim, une copie de la physique du jeu qui tourne plus de mille fois plus vite que le temps réel.
+      Cette page se met à jour toute seule pendant l'entraînement.</p>
+    <div class="status" aria-live="polite">
+      <span class="pill" id="pill">Chargement…</span>
+      <span id="where"></span>
+    </div>
+  </header>
+
+  <section class="tiles" id="tiles" aria-label="Chiffres clés"></section>
+
+  <h2>Courbes d'apprentissage</h2>
+  <section class="charts" id="charts"></section>
+
+  <h2 id="replay-title">Dernière sauvegarde du bot</h2>
+  <section class="tiles" id="match-stats" aria-label="Comparaison avec un jeu au hasard"></section>
+  <section class="panel" aria-label="Replay vu de dessus" id="replay-panel">
+    <canvas id="pitch" width="1100" height="760"></canvas>
+    <div class="controls">
+      <button id="play" type="button" aria-pressed="true">Pause</button>
+      <button type="button" class="speed" data-speed="1" aria-pressed="true">×1</button>
+      <button type="button" class="speed" data-speed="2" aria-pressed="false">×2</button>
+      <button type="button" class="speed" data-speed="4" aria-pressed="false">×4</button>
+      <div class="scrub">
+        <input id="scrub" type="range" min="0" value="0" step="1" aria-label="Position dans le replay">
+        <div class="marks" id="marks" aria-hidden="true"></div>
+      </div>
+      <span class="time data" id="time">0,0 s</span>
+    </div>
+    <div class="legend">
+      <span><i style="background: var(--blue)"></i>Bleu</span>
+      <span><i style="background: var(--orange)"></i>Orange</span>
+      <span>Le bot joue contre lui-même, vu de dessus. Voitures et balle grossies ; plus la balle est haute, plus elle paraît grosse.</span>
+      <span>Traits blancs sous la barre : buts.</span>
+    </div>
+  </section>
+
+  <footer>
+    Entraînement avec <a href="https://rlgym.org">RLGym</a>, RocketSim et RLGym-PPO.
+    Code : <a href="https://github.com/Paul-Tardieu/rocket-league-remake">rocket-league-remake</a> ·
+    <a href="https://portfolio.tardieu.ovh/">Portfolio</a>
+  </footer>
+</main>
+
+<script>
+// ?data=URL lets a local copy of the page read a local snapshot.
+const DATA_URL = new URLSearchParams(location.search).get("data")
+  || "https://raw.githubusercontent.com/Paul-Tardieu/projects/data/rocket-league/snapshot.json";
+const REFRESH_MS = 60_000;
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const COLORS = { blue: css("--blue"), orange: css("--orange"), turf: css("--turf"), turfAlt: css("--turf-alt"), ink: css("--ink"), muted: css("--muted"), line: css("--line"), panel: css("--panel"), accent: css("--accent"), bg: css("--bg") };
+const fmt = (n, digits = 1) => n.toLocaleString("fr-FR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+const millions = (n) => `${fmt(n / 1e6, n < 1e7 ? 2 : 1)} M`;
+
+function ago(seconds) {
+  if (seconds < 90) return "il y a moins de 2 min";
+  if (seconds < 5400) return `il y a ${Math.round(seconds / 60)} min`;
+  if (seconds < 172800) return `il y a ${Math.round(seconds / 3600)} h`;
+  return `il y a ${Math.round(seconds / 86400)} jours`;
+}
+
+/* ---------- Status and headline numbers ---------- */
+function renderStatus(snap) {
+  const age = (Date.now() - Date.parse(snap.updated)) / 1000;
+  // The exporter pushes every 5 minutes; a snapshot much older than that means it stopped too.
+  const live = snap.running && age < 20 * 60;
+  const pill = document.getElementById("pill");
+  pill.textContent = live ? "Entraînement en cours" : "Entraînement arrêté";
+  pill.classList.toggle("on", live);
+  document.getElementById("where").innerHTML =
+    `sur la machine <span class="data">${escapeHtml(snap.machine)}</span> · données mises à jour ${ago(age)}`;
+}
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+function lastValue(values) {
+  for (let i = values.length - 1; i >= 0; i--) if (values[i] !== null) return values[i];
+  return null;
+}
+
+function tile(label, value, detail) {
+  return `<div class="tile"><span class="label">${label}</span><span class="value data">${value}</span><span class="vs">${detail}</span></div>`;
+}
+
+function renderTiles(snap) {
+  const c = snap.curves;
+  const steps = lastValue(c.timesteps), sps = lastValue(c.steps_per_second), reward = lastValue(c.reward);
+  document.getElementById("tiles").innerHTML = steps === null
+    ? `<p class="empty">Pas encore de données : l'entraînement vient de démarrer.</p>`
+    : [
+      tile("Pas d'entraînement", millions(steps), "décisions prises par le bot depuis le début, 15 par seconde de jeu"),
+      // 1v1: each game tick-decision is two agent steps, one per car.
+      tile("Vitesse", `${fmt(sps, 0)}`, "pas par seconde, soit environ " + fmt(sps / 2 / 15 / 60, 0) + " minutes de jeu par seconde réelle"),
+      tile("Récompense moyenne", fmt(reward, 3), "par pas, à la dernière itération : plus c'est haut, mieux il joue"),
+    ].join("");
+}
+
+/* ---------- Learning curves: one small chart per measure, each with its own scale ---------- */
+const CURVES = [
+  { key: "reward", title: "Récompense moyenne", digits: 3,
+    note: "Ce que le bot gagne en moyenne à chaque décision : aller vers la balle, la pousser vers le but adverse, la toucher (+0,1), marquer (+10). Elle doit monter." },
+  { key: "entropy", title: "Entropie", digits: 3,
+    note: "À quel point le bot hésite entre ses 90 actions possibles. Haute au début (il essaie tout au hasard), elle baisse quand il sait quoi faire." },
+  { key: "kl", title: "Divergence KL", digits: 5,
+    note: "De combien le comportement change à chaque mise à jour. Elle doit rester petite : un bot qui change trop d'un coup oublie ce qu'il savait." },
+  { key: "steps_per_second", title: "Pas par seconde", digits: 0,
+    note: "La vitesse de l'entraînement sur la machine : combien de décisions simulées et apprises chaque seconde." },
+];
+
+function renderCharts(snap) {
+  const box = document.getElementById("charts");
+  if (!box.children.length) {
+    box.innerHTML = CURVES.map((c) => `<div class="panel"><h3>${c.title}</h3><p class="note">${c.note}</p><div class="chart" id="chart-${c.key}"></div></div>`).join("");
+  }
+  CURVES.forEach((c) => lineChart(document.getElementById(`chart-${c.key}`), snap.curves.timesteps, snap.curves[c.key], c));
+}
+
+function niceTicks(min, max, count) {
+  const span = max - min || Math.abs(max) || 1;
+  const raw = span / count, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw);
+  const ticks = [];
+  for (let v = Math.floor(min / step) * step; v <= max + step * 1e-9; v += step) ticks.push(v);
+  if (ticks.at(-1) < max) ticks.push(ticks.at(-1) + step);
+  return ticks;
+}
+
+function lineChart(box, steps, values, spec) {
+  const pts = steps.map((s, i) => [s / 1e6, values[i]]).filter((p) => p[1] !== null);
+  if (pts.length < 2) { box.innerHTML = `<p class="empty">Pas encore assez d'itérations.</p>`; return; }
+  const w = 520, h = 220, m = { l: 62, r: 14, t: 10, b: 30 };
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const xMax = Math.max(...xs) || 1;
+  const yTicks = niceTicks(Math.min(...ys, spec.key === "reward" ? 0 : Infinity), Math.max(...ys), 4);
+  const yMin = yTicks[0], yMax = yTicks.at(-1);
+  const xTicks = niceTicks(0, xMax, 4).filter((v) => v <= xMax * 1.001);
+  const X = (v) => m.l + (v / xMax) * (w - m.l - m.r);
+  const Y = (v) => h - m.b - ((v - yMin) / (yMax - yMin || 1)) * (h - m.t - m.b);
+  const line = pts.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
+  const mono = `font-family="IBM Plex Mono, monospace" font-size="11" fill="${COLORS.muted}"`;
+  const tickDigits = Math.max(0, Math.min(5, -Math.floor(Math.log10((yTicks[1] - yTicks[0]) || 1))));
+  box.innerHTML = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${spec.title} selon les pas d'entraînement">
+    ${yTicks.map((v) => `<line x1="${m.l}" x2="${w - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${COLORS.line}" stroke-width="1"/>
+      <text x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end" ${mono}>${fmt(v, tickDigits)}</text>`).join("")}
+    ${xTicks.map((v) => `<text x="${X(v)}" y="${h - 8}" text-anchor="middle" ${mono}>${fmt(v, xMax < 10 ? 1 : 0)} M</text>`).join("")}
+    <path d="${line}" fill="none" stroke="${COLORS.accent}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${X(xs.at(-1))}" cy="${Y(ys.at(-1))}" r="4" fill="${COLORS.accent}" stroke="${COLORS.panel}" stroke-width="2"/>
+    <line class="cross" x1="0" x2="0" y1="${m.t}" y2="${h - m.b}" stroke="${COLORS.ink}" stroke-opacity="0.4" visibility="hidden"/>
+    <circle class="dot" r="5" fill="${COLORS.accent}" stroke="${COLORS.bg}" stroke-width="2" visibility="hidden"/>
+    <rect class="hit" x="${m.l}" y="0" width="${w - m.l - m.r}" height="${h - m.b}" fill="transparent"/>
+  </svg><div class="tip data" hidden></div>`;
+  const svg = box.querySelector("svg"), tip = box.querySelector(".tip");
+  const cross = svg.querySelector(".cross"), dot = svg.querySelector(".dot"), hit = svg.querySelector(".hit");
+  hit.addEventListener("pointermove", (e) => {
+    const rect = svg.getBoundingClientRect();
+    const vx = ((e.clientX - rect.left) / rect.width) * w;
+    let best = 0;
+    xs.forEach((x, i) => { if (Math.abs(X(x) - vx) < Math.abs(X(xs[best]) - vx)) best = i; });
+    const px = X(xs[best]), py = Y(ys[best]);
+    cross.setAttribute("x1", px); cross.setAttribute("x2", px); cross.setAttribute("visibility", "visible");
+    dot.setAttribute("cx", px); dot.setAttribute("cy", py); dot.setAttribute("visibility", "visible");
+    tip.hidden = false;
+    tip.textContent = `${fmt(xs[best], 2)} M pas · ${fmt(ys[best], spec.digits)}`;
+    const left = (px / w) * rect.width;
+    tip.style.left = `${Math.min(Math.max(0, left - 70), rect.width - tip.offsetWidth)}px`;
+    tip.style.top = `${(py / h) * rect.height - 40}px`;
+  });
+  hit.addEventListener("pointerleave", () => {
+    tip.hidden = true; cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden");
+  });
+}
+
+/* ---------- Latest checkpoint: stats against random play, and its replay ---------- */
+function renderMatchStats(replay) {
+  const box = document.getElementById("match-stats");
+  document.getElementById("replay-panel").hidden = !replay;
+  if (!replay) {
+    document.getElementById("replay-title").textContent = "Dernière sauvegarde du bot";
+    box.innerHTML = `<p class="empty">Pas encore de sauvegarde : la première arrive après 5 millions de pas.</p>`;
+    return;
+  }
+  const s = replay.stats;
+  document.getElementById("replay-title").textContent = `Dernière sauvegarde du bot : ${millions(replay.checkpoint_timesteps)} de pas`;
+  box.innerHTML = [
+    tile(`Touches de balle en ${fmt(s.seconds, 0)} s`, s.trained.touches, `bot entraîné, contre <span class="data">${s.random.touches}</span> en jouant au hasard`),
+    tile(`Buts en ${fmt(s.seconds, 0)} s`, s.trained.goals, `bot entraîné, contre <span class="data">${s.random.goals}</span> en jouant au hasard`),
+  ].join("");
+}
+
+const FIELD = { halfWidth: 4096, halfLength: 5120, goalHalfWidth: 893, goalDepth: 880, ball: 92 };
+// Cars and ball are drawn larger than life: at true scale they are a few pixels wide.
+const ZOOM = 2.2;
+const canvas = document.getElementById("pitch");
+const ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
+const scale = Math.min((W - 40) / (2 * (FIELD.halfLength + FIELD.goalDepth)), (H - 40) / (2 * FIELD.halfWidth));
+// World Y (goal to goal) runs left-right on screen, world X runs top-bottom.
+const toScreen = (x, y) => [W / 2 + y * scale, H / 2 + x * scale];
+const lerp = (a, b, t) => a + (b - a) * t;
+const lerpAngle = (a, b, t) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * t;
+let frames = [], dt = 1 / 15, replayCheckpoint = null;
+
+function drawField() {
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0, 0, W, H);
+  const [x0, y0] = toScreen(-FIELD.halfWidth, -FIELD.halfLength);
+  const fw = 2 * FIELD.halfLength * scale, fh = 2 * FIELD.halfWidth * scale;
+  const stripes = 12;
+  for (let i = 0; i < stripes; i++) {
+    ctx.fillStyle = i % 2 ? COLORS.turf : COLORS.turfAlt;
+    ctx.fillRect(x0 + (fw / stripes) * i, y0, fw / stripes + 1, fh);
+  }
+  ctx.strokeStyle = "rgba(255,255,255,0.45)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x0, y0, fw, fh);
+  ctx.beginPath(); ctx.moveTo(W / 2, y0); ctx.lineTo(W / 2, y0 + fh); ctx.stroke();
+  ctx.beginPath(); ctx.arc(W / 2, H / 2, 1000 * scale, 0, Math.PI * 2); ctx.stroke();
+  // Blue defends -Y (left), orange defends +Y (right).
+  [[-1, COLORS.blue], [1, COLORS.orange]].forEach(([side, color]) => {
+    const [gx, gy] = toScreen(-FIELD.goalHalfWidth, side < 0 ? -FIELD.halfLength - FIELD.goalDepth : FIELD.halfLength);
+    ctx.fillStyle = color + "55";
+    ctx.strokeStyle = color;
+    ctx.fillRect(gx, gy, FIELD.goalDepth * scale, 2 * FIELD.goalHalfWidth * scale);
+    ctx.strokeRect(gx, gy, FIELD.goalDepth * scale, 2 * FIELD.goalHalfWidth * scale);
+  });
+}
+
+function drawFrame(f) {
+  drawField();
+  if (!frames.length) return;
+  const i = Math.floor(f), t = f - i;
+  const a = frames[i], b = frames[Math.min(i + 1, frames.length - 1)];
+  // Do not interpolate across a goal reset: the positions jump.
+  const k = a.goal ? 0 : t;
+  const [bx, by, bz] = a.ball.map((v, j) => lerp(v, b.ball[j], k));
+  const [sx, sy] = toScreen(bx, by);
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.beginPath(); ctx.arc(sx, sy, FIELD.ball * scale * ZOOM, 0, Math.PI * 2); ctx.fill();
+  a.cars.forEach((car, n) => {
+    const other = b.cars[n] || car;
+    const x = lerp(car.pos[0], other.pos[0], k), y = lerp(car.pos[1], other.pos[1], k);
+    const yaw = lerpAngle(car.yaw, other.yaw, k);
+    const [cx, cy] = toScreen(x, y);
+    ctx.save();
+    ctx.translate(cx, cy);
+    // World heading (cos yaw, sin yaw) maps to screen (sin yaw, cos yaw).
+    ctx.rotate(Math.atan2(Math.cos(yaw), Math.sin(yaw)));
+    const len = 118 * scale * ZOOM, wid = 84 * scale * ZOOM;
+    ctx.fillStyle = car.team === 0 ? COLORS.blue : COLORS.orange;
+    ctx.globalAlpha = car.ground ? 1 : 0.75;
+    ctx.fillRect(-len / 2, -wid / 2, len, wid);
+    ctx.fillStyle = COLORS.ink;
+    ctx.fillRect(len / 2 - len * 0.22, -wid / 2, len * 0.22, wid);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  });
+  const r = FIELD.ball * scale * ZOOM * (1 + bz / 1500);
+  ctx.fillStyle = COLORS.ink;
+  ctx.beginPath(); ctx.arc(sx, sy - bz * scale * 0.25, r, 0, Math.PI * 2); ctx.fill();
+  if (a.goal || frames.slice(Math.max(0, i - 20), i).some((g) => g.goal)) {
+    ctx.font = `700 ${Math.round(H / 7)}px ${css("--font-display")}`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = COLORS.accent;
+    ctx.fillText("BUT !", W / 2, H / 2 - H / 8);
+  }
+}
+
+const scrub = document.getElementById("scrub");
+const timeEl = document.getElementById("time");
+const playBtn = document.getElementById("play");
+let position = 0, speed = 1, playing = !matchMedia("(prefers-reduced-motion: reduce)").matches, last = null;
+
+function loadReplay(replay) {
+  if (!replay || replay.checkpoint_timesteps === replayCheckpoint) return;
+  replayCheckpoint = replay.checkpoint_timesteps;
+  frames = replay.frames;
+  dt = replay.seconds_per_frame;
+  position = 0;
+  scrub.max = Math.max(0, frames.length - 1);
+  const marks = document.getElementById("marks");
+  marks.innerHTML = "";
+  frames.forEach((f, i) => {
+    if (!f.goal) return;
+    const mark = document.createElement("span");
+    mark.style.left = `${(i / (frames.length - 1)) * 100}%`;
+    marks.append(mark);
+  });
+}
+
+function setPlaying(value) {
+  playing = value;
+  playBtn.textContent = playing ? "Pause" : "Lecture";
+  playBtn.setAttribute("aria-pressed", String(playing));
+}
+setPlaying(playing);
+playBtn.addEventListener("click", () => setPlaying(!playing));
+document.querySelectorAll(".speed").forEach((btn) => btn.addEventListener("click", () => {
+  speed = Number(btn.dataset.speed);
+  document.querySelectorAll(".speed").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+}));
+scrub.addEventListener("input", () => { position = Number(scrub.value); render(); });
+
+function render() {
+  drawFrame(Math.max(0, Math.min(position, frames.length - 1.0001)));
+  scrub.value = Math.floor(position);
+  timeEl.textContent = `${fmt(position * dt)} s`;
+}
+function tick(now) {
+  if (last !== null && playing && frames.length > 1) {
+    position += ((now - last) / 1000) * speed / dt;
+    if (position >= frames.length - 1) position = 0;
+  }
+  last = now;
+  render();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+/* ---------- Data loading ---------- */
+let snapshot = null;
+async function refresh() {
+  try {
+    // The query string gets past the CDN cache of raw.githubusercontent.com.
+    const sep = DATA_URL.includes("?") ? "&" : "?";
+    const response = await fetch(`${DATA_URL}${sep}t=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) throw new Error(response.status);
+    snapshot = await response.json();
+    renderTiles(snapshot);
+    renderCharts(snapshot);
+    renderMatchStats(snapshot.replay);
+    loadReplay(snapshot.replay);
+  } catch (error) {
+    if (!snapshot) {
+      document.getElementById("pill").textContent = "Pas encore de données";
+      document.getElementById("tiles").innerHTML = `<p class="empty">Aucun entraînement publié pour l'instant.</p>`;
+      return;
+    }
+  }
+  renderStatus(snapshot);
+}
+refresh();
+setInterval(refresh, REFRESH_MS);
+// Keep "updated X min ago" honest between two fetches.
+setInterval(() => snapshot && renderStatus(snapshot), 15_000);
+</script>
+</body>
+</html>

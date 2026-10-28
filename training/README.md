@@ -43,6 +43,41 @@ Mesuré sur la machine de dev (16 cœurs, GPU NVIDIA) : environ 19 000 pas d'age
 (~150 000 ticks de physique par seconde, ~1200× le temps réel), processeur à ~50 %. Nombre de processus
 réglable avec `CARBALL_N_PROC`.
 
+## Suivi en direct sur projects.tardieu.ovh
+
+La page [projects.tardieu.ovh/rocket-league/](https://projects.tardieu.ovh/rocket-league/) montre l'entraînement
+en cours : statut et machine, courbes (récompense, entropie, divergence KL, pas par seconde), touches et buts de
+la dernière sauvegarde comparés au jeu au hasard, et son replay vu de dessus.
+
+Pendant l'entraînement, dans un deuxième terminal :
+
+```bash
+uv run python publish.py              # publie toutes les 5 min (Ctrl+C pour arrêter)
+uv run python publish.py --dry-run    # fabrique data/snapshot.json sans rien envoyer
+uv run python publish.py --site       # envoie la page elle-même (site/rocket-league/) après l'avoir modifiée
+```
+
+Comment ça marche : `publish.py` lit les rapports d'itération de `data/train.log`, enregistre 60 s de replay à
+chaque nouvelle sauvegarde, et écrit tout dans **un seul fichier JSON** qu'il fabrique lui-même. Il le pousse
+comme unique commit de la branche `data` du repo GitHub `Paul-Tardieu/projects` (la branche est écrasée à chaque
+fois, donc le repo ne grossit pas). La page, servie par GitHub Pages depuis la branche `main` du même repo, relit
+ce fichier toutes les minutes. Les PC d'entraînement n'ouvrent aucun port : ils envoient, personne ne s'y
+connecte. Aucun checkpoint ni maillage de collision n'est jamais envoyé.
+
+Le statut « en cours » veut dire que `data/train.log` a bougé dans les 3 dernières minutes : lancer
+l'entraînement avec `script -qfc "uv run python train.py" data/train.log`. Une seule machine publie à la fois ;
+son nom vient de `CARBALL_MACHINE` (sinon le nom de l'ordinateur).
+
+Sur une autre machine (le PC fixe) : il lui faut un droit d'écriture sur `Paul-Tardieu/projects`. Le plus sûr
+est une clé de déploiement, qui ne donne accès qu'à ce repo :
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/carball_publish -N ""
+gh repo deploy-key add ~/.ssh/carball_publish.pub --repo Paul-Tardieu/projects --allow-write --title "PC fixe"
+CARBALL_PUBLISH_REPO="git@github.com:Paul-Tardieu/projects.git" GIT_SSH_COMMAND="ssh -i ~/.ssh/carball_publish" \
+  CARBALL_MACHINE="pc-fixe" uv run python publish.py
+```
+
 ## Jouer contre le bot dans le vrai jeu
 
 Le bot entraîné se branche sur Rocket League avec [RLBot](https://rlbot.org), uniquement en matchs
